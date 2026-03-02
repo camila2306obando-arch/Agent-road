@@ -1,0 +1,5 @@
+{
+  "name": "Agent Road: Stability Run",
+  "description": "A tactical vertical racer based on Road Fighter. Switch between Speed and Protection agents to reach the safe zone.",
+  "requestFramePermissions": []
+}
