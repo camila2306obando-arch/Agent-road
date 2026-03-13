@@ -4,13 +4,30 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Shield, Zap, AlertTriangle, Trophy, Timer, Heart, RefreshCw, Cpu, Target } from 'lucide-react';
+import { 
+  Shield, 
+  Zap, 
+  AlertTriangle, 
+  Trophy, 
+  Timer, 
+  Heart, 
+  RefreshCw, 
+  Cpu, 
+  Target,
+  Maximize,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // --- Constants & Types ---
 
 enum GameState {
-  START,
+  SPLASH,
+  DIALOGUE,
+  MENU,
   PLAYING,
   GAMEOVER,
   WIN
@@ -41,7 +58,7 @@ const AGENTS: Record<AgentType, AgentConfig> = {
     shieldDuration: 3000,
     shieldCooldown: 8000,
     color: '#10b981', // Emerald
-    name: 'Agent A - Speed'
+    name: 'Agent Speed'
   },
   [AgentType.PROTECTION]: {
     maxSpeed: 8,
@@ -51,7 +68,7 @@ const AGENTS: Record<AgentType, AgentConfig> = {
     shieldDuration: 5000,
     shieldCooldown: 10000,
     color: '#3b82f6', // Blue
-    name: 'Agent B - Protection'
+    name: 'Agent Warden'
   }
 };
 
@@ -70,8 +87,8 @@ interface Entity {
   lastShot?: number;
 }
 
-const CANVAS_WIDTH = 600;
-const CANVAS_HEIGHT = 800;
+const CANVAS_WIDTH = 450;
+const CANVAS_HEIGHT = 1000;
 const TARGET_DISTANCE = 50000;
 const INITIAL_TIME = 120;
 
@@ -79,12 +96,12 @@ const INITIAL_TIME = 120;
 const getRoadParams = (dist: number) => {
   // Winding path inspired by the user's image
   // Changes direction frequently to create a "snake" effect
-  const mainCurve = Math.sin(dist * 0.0006) * 160;
-  const secondaryWiggle = Math.cos(dist * 0.0012) * 40;
+  const mainCurve = Math.sin(dist * 0.0006) * 100;
+  const secondaryWiggle = Math.cos(dist * 0.0012) * 25;
   const offset = mainCurve + secondaryWiggle;
   
   // Road width varies to create challenging narrow sections
-  const width = 380 - Math.abs(Math.sin(dist * 0.00015)) * 160;
+  const width = 280 - Math.abs(Math.sin(dist * 0.00015)) * 100;
   return { offset, width };
 };
 
@@ -92,9 +109,75 @@ const TRAFFIC_COLORS = ['#ef4444', '#f97316', '#8b5cf6', '#ec4899', '#06b6d4', '
 
 // --- Main Component ---
 
+// --- Helper Components ---
+const TypewriterText = ({ text, delay = 30 }: { text: string; delay?: number }) => {
+  const [displayedText, setDisplayedText] = useState("");
+  
+  useEffect(() => {
+    setDisplayedText("");
+    let i = 0;
+    const timer = setInterval(() => {
+      setDisplayedText(text.slice(0, i + 1));
+      i++;
+      if (i >= text.length) clearInterval(timer);
+    }, delay);
+    return () => clearInterval(timer);
+  }, [text, delay]);
+
+  return <span>{displayedText}</span>;
+};
+
+const DossierWrapper = ({ children, title, onBack }: { children: React.ReactNode; title: string; onBack: () => void }) => (
+  <div className="flex flex-col items-center w-full max-w-md animate-in fade-in zoom-in duration-300">
+    <div className="relative w-full">
+      {/* Red Folder Background */}
+      <div className="absolute inset-0 bg-red-950 rounded-lg shadow-2xl transform -rotate-1 translate-x-2 translate-y-2"></div>
+      <div className="relative bg-red-900 rounded-lg shadow-xl p-3 pb-6 transform rotate-1">
+        {/* Folder Tab */}
+        <div className="absolute -top-4 left-6 bg-red-900 px-4 py-1 rounded-t-lg font-black text-[8px] text-red-400 tracking-widest uppercase">
+          FILE_ID: 437518
+        </div>
+        
+        {/* White Paper */}
+        <div className="bg-[#f5f5f5] text-neutral-900 p-6 rounded shadow-inner min-h-[450px] flex flex-col relative overflow-hidden border border-neutral-300">
+          {/* Paperclip effect */}
+          <div className="absolute top-4 right-10 w-4 h-10 border-2 border-neutral-400 rounded-full opacity-40 transform rotate-12"></div>
+          
+          {/* Paper Header */}
+          <div className="border-b border-black/10 pb-3 mb-6 flex justify-between items-start">
+            <div>
+              <h2 className="text-xl font-black tracking-tight uppercase italic text-red-900">{title}</h2>
+              <div className="text-[8px] font-mono opacity-60 uppercase">Agent Road Investigation Board</div>
+            </div>
+            <div className="w-10 h-10 border-2 border-red-600/30 rounded-full flex items-center justify-center text-red-600/40 font-black text-[6px] rotate-12 uppercase text-center leading-tight">
+              Top<br/>Secret
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="flex-1 text-left">
+            {children}
+          </div>
+
+          {/* Footer details */}
+          <div className="mt-6 pt-3 border-t border-black/5 flex justify-between items-center">
+            <div className="text-[8px] font-mono opacity-40">CONFIDENTIAL // 2026</div>
+            <button 
+              onClick={onBack}
+              className="px-6 py-2 bg-neutral-900 text-white font-bold rounded text-xs hover:bg-red-900 transition-colors uppercase tracking-widest"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [gameState, setGameState] = useState<GameState>(GameState.START);
+  const [gameState, setGameState] = useState<GameState>(GameState.SPLASH);
   const [activeAgent, setActiveAgent] = useState<AgentType>(AgentType.SPEED);
   const [stability, setStability] = useState(100);
   const [time, setTime] = useState(INITIAL_TIME);
@@ -103,6 +186,12 @@ export default function App() {
   const [shieldActive, setShieldActive] = useState(false);
   const [shieldCooldown, setShieldCooldown] = useState(0);
   const [missionItems, setMissionItems] = useState(0);
+  const [dialogueStep, setDialogueStep] = useState(0);
+  const [highScores, setHighScores] = useState<number[]>(() => {
+    const saved = localStorage.getItem('agent_road_scores');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [menuView, setMenuView] = useState<'main' | 'controls' | 'scores'>('main');
   
   // Game refs for mutable state in loop
   const playerPos = useRef({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 150 });
@@ -114,6 +203,59 @@ export default function App() {
   const nextMissionItemDist = useRef(TARGET_DISTANCE * 0.25);
   const wrongWaySpawned = useRef(0);
   const attackersSpawned = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const touchStartX = useRef<number | null>(null);
+  const touchCurrentX = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (gameState === GameState.GAMEOVER || gameState === GameState.WIN) {
+      setHighScores(prev => {
+        const newScores = [...prev, score].sort((a, b) => b - a).slice(0, 5);
+        localStorage.setItem('agent_road_scores', JSON.stringify(newScores));
+        return newScores;
+      });
+    }
+  }, [gameState, score]);
+
+  const toggleFullScreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const handleTouchStartGlobal = (e: React.TouchEvent) => {
+    if (gameState !== GameState.PLAYING) return;
+    const touch = e.touches[0];
+    touchStartX.current = touch.clientX;
+    touchCurrentX.current = touch.clientX;
+    keysPressed.current.add('KeyW');
+  };
+
+  const handleTouchMoveGlobal = (e: React.TouchEvent) => {
+    if (gameState !== GameState.PLAYING) return;
+    const touch = e.touches[0];
+    touchCurrentX.current = touch.clientX;
+  };
+
+  const handleTouchEndGlobal = () => {
+    touchStartX.current = null;
+    touchCurrentX.current = null;
+    keysPressed.current.delete('KeyW');
+  };
+
+  const handleTouchStart = (key: string) => {
+    keysPressed.current.add(key);
+  };
+
+  const handleTouchEnd = (key: string) => {
+    keysPressed.current.delete(key);
+  };
 
   // --- Input Handling ---
 
@@ -288,6 +430,15 @@ export default function App() {
       currentSpeed.current = Math.max(0, currentSpeed.current - 0.05);
     }
 
+    // Touch Steering
+    if (touchStartX.current !== null && touchCurrentX.current !== null) {
+      const diff = touchCurrentX.current - touchStartX.current;
+      const containerWidth = containerRef.current?.clientWidth || 1;
+      const normalizedDiff = (diff / containerWidth) * CANVAS_WIDTH;
+      playerPos.current.x += normalizedDiff * 1.5;
+      touchStartX.current = touchCurrentX.current;
+    }
+
     // Current road params at player position
     const { offset: playerRoadOffset, width: playerRoadWidth } = getRoadParams(distance);
     const roadCenterX = CANVAS_WIDTH / 2 + playerRoadOffset;
@@ -438,7 +589,7 @@ export default function App() {
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     // Draw Road (we draw it segment by segment to show curves)
-    const segments = 40;
+    const segments = 50;
     const segmentHeight = CANVAS_HEIGHT / segments;
     
     for (let i = segments; i >= 0; i--) {
@@ -652,7 +803,7 @@ export default function App() {
     setDistance(0);
     setMissionItems(0);
     entities.current = [];
-    playerPos.current = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT - 150 };
+    playerPos.current = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT * 0.65 };
     currentSpeed.current = 0;
     setShieldActive(false);
     setShieldCooldown(0);
@@ -663,29 +814,39 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white font-sans flex items-center justify-center p-4">
-      <div className="relative w-full max-w-2xl h-[95vh] bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-neutral-950 text-white font-sans flex items-center justify-center">
+      <div ref={containerRef} className="relative w-full max-w-lg h-screen bg-neutral-900 sm:rounded-3xl border border-white/5 shadow-2xl overflow-hidden flex flex-col">
         
         {/* Top HUD */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20 pointer-events-none">
-          {/* Time (Top Left) */}
-          <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 flex items-center gap-2">
-            <Timer size={16} className="text-neutral-400" />
-            <div className={`text-xl font-mono font-bold ${time < 15 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-              {Math.max(0, Math.ceil(time))}s
+          <div className="flex gap-2">
+            {/* Time (Top Left) */}
+            <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 flex items-center gap-2">
+              <Timer size={16} className="text-neutral-400" />
+              <div className={`text-xl font-mono font-bold ${time < 15 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                {Math.max(0, Math.ceil(time))}s
+              </div>
             </div>
+
+            {/* Full Screen Button */}
+            <button 
+              onClick={toggleFullScreen}
+              className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors pointer-events-auto"
+            >
+              <Maximize size={16} />
+            </button>
           </div>
 
           {/* Stability Bar (Top Center) */}
-          <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 w-64 flex flex-col gap-2">
+          <div className="bg-black/50 backdrop-blur-md p-2 rounded-xl border border-white/10 w-32 sm:w-48 flex flex-col gap-1">
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <Heart size={14} className="text-red-500" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-300">Stability</span>
+              <div className="flex items-center gap-1">
+                <Heart size={12} className="text-red-500" />
+                <span className="text-[8px] font-bold uppercase tracking-wider text-neutral-300">Stability</span>
               </div>
-              <span className="text-xs font-mono font-bold">{Math.round(stability)}%</span>
+              <span className="text-[10px] font-mono font-bold">{Math.round(stability)}%</span>
             </div>
-            <div className="h-2.5 bg-black rounded-full overflow-hidden p-0.5 border border-white/10">
+            <div className="h-1.5 bg-black rounded-full overflow-hidden p-0.5 border border-white/10">
               <motion.div 
                 className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-emerald-500 rounded-full"
                 animate={{ width: `${stability}%` }}
@@ -729,22 +890,22 @@ export default function App() {
           </div>
 
           {/* Mission Items & Distance (Bottom Center) */}
-          <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 flex flex-col items-center gap-2 w-48">
-             <div className="flex gap-2">
+          <div className="bg-black/50 backdrop-blur-md p-2 rounded-xl border border-white/10 flex flex-col items-center gap-1 w-32 sm:w-40">
+             <div className="flex gap-1">
               {[1, 2, 3].map(i => (
                 <div 
                   key={i} 
-                  className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all ${
+                  className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
                     missionItems >= i 
                       ? 'bg-red-500/20 border-red-500 text-red-500' 
                       : 'bg-black/50 border-white/10 text-neutral-700'
                   }`}
                 >
-                  <AlertTriangle size={14} />
+                  <AlertTriangle size={12} />
                 </div>
               ))}
             </div>
-            <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
+            <div className="w-full h-1 bg-black rounded-full overflow-hidden">
               <motion.div 
                 className="h-full bg-white"
                 animate={{ width: `${Math.min(100, (distance / TARGET_DISTANCE) * 100)}%` }}
@@ -780,7 +941,12 @@ export default function App() {
         </div>
 
         {/* Game Canvas Area */}
-        <div className="relative flex-1 w-full bg-black overflow-hidden flex justify-center items-center">
+        <div 
+          className="relative flex-1 w-full bg-black overflow-hidden flex justify-center items-center touch-none"
+          onTouchStart={handleTouchStartGlobal}
+          onTouchMove={handleTouchMoveGlobal}
+          onTouchEnd={handleTouchEndGlobal}
+        >
           <canvas 
             ref={canvasRef}
             width={CANVAS_WIDTH}
@@ -788,35 +954,314 @@ export default function App() {
             className="w-full h-full object-cover"
           />
 
+          {/* Touch Controls (Only visible in PLAYING state) */}
+          {gameState === GameState.PLAYING && (
+            <div className="absolute inset-0 z-10 pointer-events-none">
+              {/* Mobile Specific Buttons (Hidden on desktop) */}
+              <div className="md:hidden absolute inset-0 flex justify-between items-end p-6 pb-12">
+                {/* Shield Button (Left) */}
+                <button 
+                  onMouseDown={(e) => { e.stopPropagation(); activateShield(); }}
+                  onTouchStart={(e) => { e.stopPropagation(); activateShield(); }}
+                  className="w-16 h-16 bg-white text-black border border-white/20 rounded-full flex flex-col items-center justify-center active:bg-neutral-600 active:text-white transition-colors shadow-lg pointer-events-auto"
+                >
+                  <Shield size={24} />
+                  <span className="text-[8px] font-bold mt-1">SHIELD</span>
+                </button>
+
+                {/* Agent Button (Right) */}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setActiveAgent(prev => prev === AgentType.SPEED ? AgentType.PROTECTION : AgentType.SPEED); }}
+                  className="w-16 h-16 bg-white text-black border border-white/20 rounded-full flex flex-col items-center justify-center active:bg-neutral-600 active:text-white transition-colors shadow-lg pointer-events-auto"
+                >
+                  <RefreshCw size={24} />
+                  <span className="text-[8px] font-bold mt-1">AGENT</span>
+                </button>
+              </div>
+
+              {/* Desktop/General HUD elements could go here if needed */}
+            </div>
+          )}
+
           {/* Overlays */}
           <AnimatePresence>
-            {gameState === GameState.START && (
+            {gameState === GameState.SPLASH && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-center p-8 z-30"
+                onClick={() => setGameState(GameState.DIALOGUE)}
+                className="absolute inset-0 bg-gradient-to-b from-red-900 via-red-950 to-black flex flex-col items-center justify-center text-center p-8 z-30 cursor-pointer"
               >
-                <div className="mb-6 p-4 rounded-full bg-emerald-500/20 text-emerald-400">
-                  <Zap size={48} />
+                {/* City Silhouette Background */}
+                <div className="absolute bottom-0 left-0 right-0 h-1/2 pointer-events-none overflow-hidden">
+                  <svg viewBox="0 0 800 400" className="w-full h-full opacity-40" preserveAspectRatio="none">
+                    <path d="M0,400 L0,300 L20,300 L20,250 L50,250 L50,280 L80,280 L80,220 L120,220 L120,260 L150,260 L150,180 L200,180 L200,240 L230,240 L230,200 L280,200 L280,260 L320,260 L320,150 L380,150 L380,230 L420,230 L420,190 L480,190 L480,250 L520,250 L520,170 L580,170 L580,240 L620,240 L620,210 L680,210 L680,260 L720,260 L720,190 L780,190 L780,300 L800,300 L800,400 Z" fill="black" />
+                    {/* Windows */}
+                    {[...Array(50)].map((_, i) => (
+                      <rect key={i} x={Math.random() * 800} y={200 + Math.random() * 200} width="4" height="6" fill="#fef08a" opacity={Math.random() * 0.8} />
+                    ))}
+                  </svg>
                 </div>
-                <h1 className="text-5xl font-bold mb-2 tracking-tighter italic">AGENT ROAD</h1>
-                <p className="text-neutral-400 mb-8 text-sm max-w-md">
-                  Reach the safe zone in 2:00. Collect at least 2 red mission items. 
-                  Switch agents strategically. Survive the traffic.
-                  <br /><br />
-                  <span className="text-xs font-mono">
-                    [W/S] SPEED | [Q/E] STEER | [SPACE] SHIELD | [SHIFT] AGENT
-                  </span>
-                </p>
-                <button 
-                  onClick={startGame}
-                  className="px-8 py-4 bg-white text-black font-bold rounded-full hover:bg-emerald-400 transition-colors text-lg cursor-pointer pointer-events-auto"
+                
+                <motion.div 
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="relative z-10"
                 >
-                  START MISSION
-                </button>
+                  <h1 className="text-6xl font-black mb-4 tracking-tighter italic text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]">AGENT ROAD</h1>
+                  <motion.p 
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="text-neutral-400 text-sm uppercase tracking-[0.3em]"
+                  >
+                    Click or Tap to Continue
+                  </motion.p>
+                </motion.div>
               </motion.div>
             )}
+
+            {gameState === GameState.DIALOGUE && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                  if (dialogueStep < 2) {
+                    setDialogueStep(prev => prev + 1);
+                  } else {
+                    setGameState(GameState.MENU);
+                  }
+                }}
+                className="absolute inset-0 bg-gradient-to-b from-red-900 via-red-950 to-black flex flex-col items-center justify-center p-8 z-30 cursor-pointer overflow-hidden"
+              >
+                {/* City Silhouette Background (Same as Splash) */}
+                <div className="absolute bottom-0 left-0 right-0 h-1/2 pointer-events-none opacity-20 overflow-hidden">
+                  <svg viewBox="0 0 800 400" className="w-full h-full" preserveAspectRatio="none">
+                    <path d="M0,400 L0,300 L20,300 L20,250 L50,250 L50,280 L80,280 L80,220 L120,220 L120,260 L150,260 L150,180 L200,180 L200,240 L230,240 L230,200 L280,200 L280,260 L320,260 L320,150 L380,150 L380,230 L420,230 L420,190 L480,190 L480,250 L520,250 L520,170 L580,170 L580,240 L620,240 L620,210 L680,210 L680,260 L720,260 L720,190 L780,190 L780,300 L800,300 L800,400 Z" fill="black" />
+                  </svg>
+                </div>
+
+                <div className="relative z-10 w-full max-w-md flex flex-col gap-4">
+                  {dialogueStep === 0 && (
+                    <>
+                      <motion.div 
+                        initial={{ x: -20, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        className="bg-black/80 border-l-4 border-red-600 p-4 rounded-r-xl text-left shadow-xl"
+                      >
+                        <div className="text-red-500 font-bold text-xs mb-1 uppercase tracking-widest">Agente Speed</div>
+                        <div className="text-white text-sm font-mono leading-relaxed">
+                          <TypewriterText text="La central acaba de confirmar la ruta. Tenemos que cruzar la ciudad antes del amanecer." />
+                        </div>
+                      </motion.div>
+                      <motion.div 
+                        initial={{ x: 20, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 1.5 }}
+                        className="bg-black/80 border-r-4 border-neutral-600 p-4 rounded-l-xl text-right shadow-xl self-end"
+                      >
+                        <div className="text-neutral-400 font-bold text-xs mb-1 uppercase tracking-widest">Agente Warden</div>
+                        <div className="text-white text-sm font-mono leading-relaxed italic">
+                          <TypewriterText text="No será fácil, el enemigo nos está buscando." delay={40} />
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+
+                  {dialogueStep === 1 && (
+                    <>
+                      <motion.div 
+                        initial={{ x: -20, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        className="bg-black/80 border-l-4 border-blue-400 p-4 rounded-r-xl text-left shadow-xl"
+                      >
+                        <div className="text-blue-400 font-bold text-xs mb-1 uppercase tracking-widest">Niña</div>
+                        <div className="text-white text-sm font-mono leading-relaxed">
+                          <TypewriterText text="¿De verdad vamos a llegar al lugar seguro?" />
+                        </div>
+                      </motion.div>
+                      <motion.div 
+                        initial={{ x: 20, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 1 }}
+                        className="bg-black/80 border-r-4 border-red-600 p-4 rounded-l-xl text-right shadow-xl self-end"
+                      >
+                        <div className="text-red-500 font-bold text-xs mb-1 uppercase tracking-widest">Agentes</div>
+                        <div className="text-white text-sm font-mono leading-relaxed">
+                          <TypewriterText text="Déjanoslo a nosotros." />
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+
+                  {dialogueStep === 2 && (
+                    <motion.div 
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="bg-blue-600/90 border-2 border-blue-400 p-6 rounded-2xl text-center shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+                    >
+                      <div className="text-white font-black text-xl mb-2 tracking-widest">
+                        <TypewriterText text="MISIÓN" delay={100} />
+                      </div>
+                      <div className="text-blue-50 font-bold text-sm leading-relaxed">
+                        <TypewriterText text="Llega al punto seguro con la niña antes de que se acabe el tiempo y la estabilidad llegue a 0." />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <motion.div 
+                    animate={{ opacity: [0.3, 0.7, 0.3] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="mt-8 text-neutral-500 text-[10px] uppercase tracking-[0.2em] self-center"
+                  >
+                    Click to continue
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+
+            {gameState === GameState.MENU && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-neutral-950 flex flex-col items-center justify-center text-center p-8 z-30 overflow-hidden"
+              >
+                {/* Investigation Board Background */}
+                <div className="absolute inset-0 pointer-events-none opacity-40 select-none">
+                  {/* Corkboard texture simulation */}
+                  <div className="absolute inset-0 bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:20px_20px] opacity-20" />
+                  
+                  {/* Red Strings */}
+                  <svg className="absolute inset-0 w-full h-full">
+                    <line x1="20%" y1="20%" x2="50%" y2="45%" stroke="#ef4444" strokeWidth="1.5" />
+                    <line x1="80%" y1="15%" x2="50%" y2="45%" stroke="#ef4444" strokeWidth="1.5" />
+                    <line x1="15%" y1="75%" x2="50%" y2="45%" stroke="#ef4444" strokeWidth="1.5" />
+                    <line x1="85%" y1="80%" x2="50%" y2="45%" stroke="#ef4444" strokeWidth="1.5" />
+                    <line x1="20%" y1="20%" x2="15%" y2="75%" stroke="#ef4444" strokeWidth="1.5" />
+                    <line x1="80%" y1="15%" x2="85%" y2="80%" stroke="#ef4444" strokeWidth="1.5" />
+                  </svg>
+
+                  {/* Scattered Notes & Photos */}
+                  <div className="absolute top-[15%] left-[15%] w-24 h-28 bg-white/90 shadow-lg -rotate-6 p-1 border-b-4 border-black/20">
+                    <div className="w-full h-20 bg-neutral-800 flex items-center justify-center">
+                      <Cpu size={32} className="text-white/20" />
+                    </div>
+                  </div>
+                  
+                  <div className="absolute top-[10%] right-[15%] w-20 h-24 bg-yellow-100/90 shadow-lg rotate-12 p-2 text-[6px] text-black text-left font-mono overflow-hidden">
+                    CONFIDENTIAL<br/>PROJECT: ROAD<br/>STATUS: ACTIVE<br/>TARGET: 50KM
+                  </div>
+
+                  <div className="absolute bottom-[20%] left-[10%] w-28 h-20 bg-white/90 shadow-lg rotate-3 p-2 text-[8px] text-black text-left font-bold">
+                    <div className="mb-1 border-b border-black/10">SUSPECTS</div>
+                    <div className="flex gap-1">
+                       <div className="w-4 h-4 bg-neutral-400" />
+                       <div className="w-4 h-4 bg-neutral-400" />
+                       <div className="w-4 h-4 bg-neutral-400" />
+                    </div>
+                  </div>
+
+                  <div className="absolute bottom-[15%] right-[10%] w-24 h-32 bg-white/90 shadow-lg -rotate-12 p-1">
+                     <div className="w-full h-24 bg-neutral-900 flex items-center justify-center">
+                        <Target size={40} className="text-red-500/40" />
+                     </div>
+                  </div>
+
+                  {/* Central Label */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                     <div className="flex gap-2">
+                        {['A', 'G', 'E', 'N', 'T'].map((char, i) => (
+                          <div key={i} className="w-10 h-10 bg-red-600 text-white font-black flex items-center justify-center shadow-xl rotate-[-2deg] border-2 border-red-700">
+                            {char}
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+                </div>
+
+                <div className="relative z-10 w-full flex flex-col items-center">
+                  {menuView === 'main' && (
+                  <div className="flex flex-col gap-4 w-full max-w-xs">
+                    <h2 className="text-3xl font-bold mb-8 italic tracking-tight">MAIN MENU</h2>
+                    <button 
+                      onClick={() => startGame()}
+                      className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-neutral-600 hover:text-neutral-100 transition-colors text-lg"
+                    >
+                      JUGAR
+                    </button>
+                    <button 
+                      onClick={() => setMenuView('controls')}
+                      className="w-full py-4 bg-white text-black font-bold rounded-xl border border-white/10 hover:bg-neutral-600 hover:text-neutral-100 transition-colors text-lg"
+                    >
+                      CONTROLES
+                    </button>
+                    <button 
+                      onClick={() => setMenuView('scores')}
+                      className="w-full py-4 bg-white text-black font-bold rounded-xl border border-white/10 hover:bg-neutral-600 hover:text-neutral-100 transition-colors text-lg"
+                    >
+                      PUNTAJES
+                    </button>
+                  </div>
+                )}
+
+                {menuView === 'controls' && (
+                  <DossierWrapper title="CONTROLES" onBack={() => setMenuView('main')}>
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-red-800 font-bold mb-2 text-[10px] uppercase tracking-widest border-b border-red-800/20 pb-1">PC (Teclado)</h3>
+                        <ul className="text-xs space-y-2 text-neutral-700 font-medium">
+                          <li className="flex justify-between"><span>Acelerar / Frenar</span> <span className="font-mono bg-neutral-200 px-1 rounded">[W / S]</span></li>
+                          <li className="flex justify-between"><span>Girar Izquierda / Derecha</span> <span className="font-mono bg-neutral-200 px-1 rounded">[Q / E]</span></li>
+                          <li className="flex justify-between"><span>Activar Escudo</span> <span className="font-mono bg-neutral-200 px-1 rounded">[SPACE]</span></li>
+                          <li className="flex justify-between"><span>Cambiar Agente</span> <span className="font-mono bg-neutral-200 px-1 rounded">[SHIFT]</span></li>
+                        </ul>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-red-800 font-bold mb-2 text-[10px] uppercase tracking-widest border-b border-red-800/20 pb-1">Celular (Táctil)</h3>
+                        <ul className="text-xs space-y-2 text-neutral-700 font-medium">
+                          <li className="flex justify-between"><span>Movimiento y Giro</span> <span className="font-mono bg-neutral-200 px-1 rounded">[D-PAD]</span></li>
+                          <li className="flex justify-between"><span>Cambiar Agente</span> <span className="font-mono bg-neutral-200 px-1 rounded">[AGENT]</span></li>
+                          <li className="flex justify-between"><span>Activar Escudo</span> <span className="font-mono bg-neutral-200 px-1 rounded">[SHIELD]</span></li>
+                        </ul>
+                      </div>
+
+                      <div className="mt-4 p-3 bg-yellow-100/50 border border-yellow-200 rounded text-[9px] text-yellow-900 italic">
+                        Nota: Mantén la estabilidad del vehículo por encima de 0 para evitar el fallo de la misión.
+                      </div>
+                    </div>
+                  </DossierWrapper>
+                )}
+
+                {menuView === 'scores' && (
+                  <DossierWrapper title="MEJORES PUNTAJES" onBack={() => setMenuView('main')}>
+                    <div className="w-full bg-white/50 rounded border border-black/5 overflow-hidden">
+                      {highScores.length > 0 ? (
+                        highScores.map((s, i) => (
+                          <div key={i} className="flex justify-between items-center p-3 border-b border-black/5 last:border-0">
+                            <div className="flex items-center gap-3">
+                              <span className="text-neutral-400 font-mono text-[10px]">#{i+1}</span>
+                              <Trophy size={12} className={i === 0 ? 'text-yellow-600' : 'text-neutral-400'} />
+                              <span className="text-[10px] font-bold text-neutral-500 uppercase">Registro_Score</span>
+                            </div>
+                            <span className="text-lg font-mono font-black text-red-900">{s}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-neutral-400 italic text-center text-xs">No hay expedientes registrados aún.</div>
+                      )}
+                    </div>
+                    <div className="mt-4 text-[8px] text-neutral-400 uppercase tracking-tighter text-center">
+                      *** Fin del reporte de inteligencia ***
+                    </div>
+                  </DossierWrapper>
+                )}
+              </div>
+            </motion.div>
+          )}
 
             {(gameState === GameState.GAMEOVER || gameState === GameState.WIN) && (
               <motion.div 
@@ -826,19 +1271,39 @@ export default function App() {
               >
                 {gameState === GameState.WIN ? (
                   <>
-                    <Trophy size={64} className="text-yellow-400 mb-4" />
-                    <h2 className="text-4xl font-bold mb-2 text-emerald-400">MISSION COMPLETE</h2>
-                    <p className="text-neutral-400 mb-6">You reached the safe zone with all assets.</p>
+                    <motion.div
+                      initial={{ y: -20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      className="flex flex-col items-center"
+                    >
+                      <Trophy size={64} className="text-yellow-400 mb-4" />
+                      <h2 className="text-4xl font-bold mb-2 text-emerald-400">
+                        <TypewriterText text="MISSION COMPLETE" delay={50} />
+                      </h2>
+                      <p className="text-neutral-400 mb-6">
+                        <TypewriterText text="Has llegado a la zona segura con todos los activos." />
+                      </p>
+                    </motion.div>
                   </>
                 ) : (
                   <>
-                    <AlertTriangle size={64} className="text-red-500 mb-4" />
-                    <h2 className="text-4xl font-bold mb-2 text-red-500">MISSION FAILED</h2>
-                    <p className="text-neutral-400 mb-6">
-                      {time <= 0 ? "Time expired." : 
-                       stability <= 0 ? "Vehicle destroyed." : 
-                       "Arrived without all mission items."}
-                    </p>
+                    <motion.div
+                      initial={{ y: -20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      className="flex flex-col items-center"
+                    >
+                      <AlertTriangle size={64} className="text-red-500 mb-4" />
+                      <h2 className="text-4xl font-bold mb-2 text-red-500">
+                        <TypewriterText text="MISSION FAILED" delay={50} />
+                      </h2>
+                      <p className="text-neutral-400 mb-6">
+                        <TypewriterText text={
+                          time <= 0 ? "El tiempo ha expirado." : 
+                          stability <= 0 ? "Vehículo destruido." : 
+                          "Llegaste sin todos los objetos de la misión."
+                        } />
+                      </p>
+                    </motion.div>
                   </>
                 )}
                 <div className="text-3xl font-mono mb-2">SCORE: {score}</div>
@@ -847,10 +1312,10 @@ export default function App() {
                   <span>Dist: {Math.round((distance / TARGET_DISTANCE) * 100)}%</span>
                 </div>
                 <button 
-                  onClick={startGame}
-                  className="flex items-center gap-2 px-8 py-4 bg-neutral-800 border border-white/10 rounded-full hover:bg-white hover:text-black transition-all text-lg font-bold cursor-pointer pointer-events-auto"
+                  onClick={() => setGameState(GameState.MENU)}
+                  className="flex items-center gap-2 px-8 py-4 bg-white text-black border border-white/10 rounded-full hover:bg-neutral-600 hover:text-neutral-100 transition-all text-lg font-bold cursor-pointer pointer-events-auto"
                 >
-                  <RefreshCw size={20} /> RETRY MISSION
+                  <RefreshCw size={20} /> VOLVER AL MENÚ
                 </button>
               </motion.div>
             )}
