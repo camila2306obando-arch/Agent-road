@@ -28,6 +28,7 @@ enum GameState {
   SPLASH,
   DIALOGUE,
   MENU,
+  BRIEFING,
   PLAYING,
   GAMEOVER,
   WIN
@@ -51,24 +52,24 @@ interface AgentConfig {
 
 const AGENTS: Record<AgentType, AgentConfig> = {
   [AgentType.SPEED]: {
-    maxSpeed: 12,
-    acceleration: 0.2,
-    maneuverability: 6,
+    maxSpeed: 16,
+    acceleration: 0.3,
+    maneuverability: 7,
     damageMultiplier: 1.0,
     shieldDuration: 3000,
     shieldCooldown: 8000,
     color: '#10b981', // Emerald
-    name: 'Agent Speed'
+    name: 'Speed'
   },
   [AgentType.PROTECTION]: {
-    maxSpeed: 8,
-    acceleration: 0.1,
-    maneuverability: 4,
+    maxSpeed: 11,
+    acceleration: 0.15,
+    maneuverability: 5,
     damageMultiplier: 0.4,
-    shieldDuration: 5000,
+    shieldDuration: 6000,
     shieldCooldown: 10000,
     color: '#3b82f6', // Blue
-    name: 'Agent Warden'
+    name: 'Warden'
   }
 };
 
@@ -90,7 +91,7 @@ interface Entity {
 const CANVAS_WIDTH = 450;
 const CANVAS_HEIGHT = 1000;
 const TARGET_DISTANCE = 50000;
-const INITIAL_TIME = 120;
+const INITIAL_TIME = 150;
 
 // --- Helper Functions ---
 const getRoadParams = (dist: number) => {
@@ -796,7 +797,7 @@ export default function App() {
   // --- UI Helpers ---
 
   const startGame = () => {
-    setGameState(GameState.PLAYING);
+    setGameState(GameState.BRIEFING);
     setStability(100);
     setTime(INITIAL_TIME);
     setScore(0);
@@ -811,6 +812,11 @@ export default function App() {
     nextMissionItemDist.current = TARGET_DISTANCE * 0.25;
     wrongWaySpawned.current = 0;
     attackersSpawned.current = 0;
+  };
+
+  const startMission = () => {
+    setGameState(GameState.PLAYING);
+    lastTime.current = performance.now();
   };
 
   return (
@@ -1214,7 +1220,7 @@ export default function App() {
                         <h3 className="text-red-800 font-bold mb-2 text-[10px] uppercase tracking-widest border-b border-red-800/20 pb-1">PC (Teclado)</h3>
                         <ul className="text-xs space-y-2 text-neutral-700 font-medium">
                           <li className="flex justify-between"><span>Acelerar / Frenar</span> <span className="font-mono bg-neutral-200 px-1 rounded">[W / S]</span></li>
-                          <li className="flex justify-between"><span>Girar Izquierda / Derecha</span> <span className="font-mono bg-neutral-200 px-1 rounded">[Q / E]</span></li>
+                          <li className="flex justify-between"><span>Izquierda / Derecha</span> <span className="font-mono bg-neutral-200 px-1 rounded">[A / D]</span></li>
                           <li className="flex justify-between"><span>Activar Escudo</span> <span className="font-mono bg-neutral-200 px-1 rounded">[SPACE]</span></li>
                           <li className="flex justify-between"><span>Cambiar Agente</span> <span className="font-mono bg-neutral-200 px-1 rounded">[SHIFT]</span></li>
                         </ul>
@@ -1223,14 +1229,16 @@ export default function App() {
                       <div>
                         <h3 className="text-red-800 font-bold mb-2 text-[10px] uppercase tracking-widest border-b border-red-800/20 pb-1">Celular (Táctil)</h3>
                         <ul className="text-xs space-y-2 text-neutral-700 font-medium">
-                          <li className="flex justify-between"><span>Movimiento y Giro</span> <span className="font-mono bg-neutral-200 px-1 rounded">[D-PAD]</span></li>
+                          <li className="flex justify-between"><span>Movimiento</span> <span className="font-mono bg-neutral-200 px-1 rounded">Presiona la pantalla</span></li>
+                          <li className="flex justify-between"><span>Izquierda / Derecha</span> <span className="font-mono bg-neutral-200 px-1 rounded">Desliza el dedo</span></li>
                           <li className="flex justify-between"><span>Cambiar Agente</span> <span className="font-mono bg-neutral-200 px-1 rounded">[AGENT]</span></li>
                           <li className="flex justify-between"><span>Activar Escudo</span> <span className="font-mono bg-neutral-200 px-1 rounded">[SHIELD]</span></li>
                         </ul>
                       </div>
 
-                      <div className="mt-4 p-3 bg-yellow-100/50 border border-yellow-200 rounded text-[9px] text-yellow-900 italic">
-                        Nota: Mantén la estabilidad del vehículo por encima de 0 para evitar el fallo de la misión.
+                      <div className="mt-4 p-3 bg-yellow-100/50 border border-yellow-200 rounded text-[9px] text-yellow-900 italic space-y-1">
+                        <p>Nota: Mantén la estabilidad del vehículo por encima de 0 para evitar el fallo de la misión.</p>
+                        <p>Agentes: El agente Speed es más veloz. El agente Warden es más lento pero resiste mejor los impactos y su escudo dura más tiempo.</p>
                       </div>
                     </div>
                   </DossierWrapper>
@@ -1259,6 +1267,38 @@ export default function App() {
                     </div>
                   </DossierWrapper>
                 )}
+              </div>
+            </motion.div>
+          )}
+
+          {gameState === GameState.BRIEFING && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => startMission()}
+              className="absolute inset-0 bg-neutral-900 z-50 flex flex-col items-center justify-center p-8 text-center cursor-pointer"
+            >
+              <div className="max-w-sm">
+                <div className="w-16 h-1 bg-red-600 mb-8 mx-auto" />
+                <h2 className="text-2xl font-black italic mb-6 tracking-tighter">INSTRUCCIONES DE MISIÓN</h2>
+                <div className="text-lg leading-relaxed font-medium text-neutral-200 space-y-4">
+                  <p>
+                    <TypewriterText 
+                      text="Recoge los archivos para recuperar estabilidad o ganar puntos, en caso de que la estabilidad este en 100." 
+                      delay={30}
+                    />
+                  </p>
+                  <p>
+                    <TypewriterText 
+                      text="Recoge por lo menos 2 discos para pasar exitosamente la misión, si recoges los 3 discos ganas 1000 puntos." 
+                      delay={30}
+                    />
+                  </p>
+                </div>
+                <div className="mt-12 animate-pulse text-red-500 font-bold tracking-widest text-sm">
+                  HAZ CLICK PARA COMENZAR
+                </div>
               </div>
             </motion.div>
           )}
