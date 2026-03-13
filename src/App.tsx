@@ -111,7 +111,7 @@ const TRAFFIC_COLORS = ['#ef4444', '#f97316', '#8b5cf6', '#ec4899', '#06b6d4', '
 // --- Main Component ---
 
 // --- Helper Components ---
-const TypewriterText = ({ text, delay = 30 }: { text: string; delay?: number }) => {
+const TypewriterText = ({ text, delay = 30, onComplete }: { text: string; delay?: number; onComplete?: () => void }) => {
   const [displayedText, setDisplayedText] = useState("");
   
   useEffect(() => {
@@ -120,10 +120,13 @@ const TypewriterText = ({ text, delay = 30 }: { text: string; delay?: number }) 
     const timer = setInterval(() => {
       setDisplayedText(text.slice(0, i + 1));
       i++;
-      if (i >= text.length) clearInterval(timer);
+      if (i >= text.length) {
+        clearInterval(timer);
+        if (onComplete) onComplete();
+      }
     }, delay);
     return () => clearInterval(timer);
-  }, [text, delay]);
+  }, [text, delay, onComplete]);
 
   return <span>{displayedText}</span>;
 };
@@ -188,6 +191,7 @@ export default function App() {
   const [shieldCooldown, setShieldCooldown] = useState(0);
   const [missionItems, setMissionItems] = useState(0);
   const [dialogueStep, setDialogueStep] = useState(0);
+  const [showSecondDialogue, setShowSecondDialogue] = useState(false);
   const [highScores, setHighScores] = useState<number[]>(() => {
     const saved = localStorage.getItem('agent_road_scores');
     return saved ? JSON.parse(saved) : [];
@@ -826,14 +830,6 @@ export default function App() {
         {/* Top HUD */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20 pointer-events-none">
           <div className="flex gap-2">
-            {/* Time (Top Left) */}
-            <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 flex items-center gap-2">
-              <Timer size={16} className="text-neutral-400" />
-              <div className={`text-xl font-mono font-bold ${time < 15 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                {Math.max(0, Math.ceil(time))}s
-              </div>
-            </div>
-
             {/* Full Screen Button */}
             <button 
               onClick={toggleFullScreen}
@@ -841,6 +837,14 @@ export default function App() {
             >
               <Maximize size={16} />
             </button>
+
+            {/* Time (Top Left) */}
+            <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl border border-white/10 flex items-center gap-2">
+              <Timer size={16} className="text-neutral-400" />
+              <div className={`text-xl font-mono font-bold ${time < 15 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                {Math.max(0, Math.ceil(time))}s
+              </div>
+            </div>
           </div>
 
           {/* Stability Bar (Top Center) */}
@@ -964,7 +968,7 @@ export default function App() {
           {gameState === GameState.PLAYING && (
             <div className="absolute inset-0 z-10 pointer-events-none">
               {/* Mobile Specific Buttons (Hidden on desktop) */}
-              <div className="md:hidden absolute inset-0 flex justify-between items-end p-6 pb-12">
+              <div className="md:hidden absolute inset-0 flex justify-between items-end p-6 pb-32">
                 {/* Shield Button (Left) */}
                 <button 
                   onMouseDown={(e) => { e.stopPropagation(); activateShield(); }}
@@ -1036,6 +1040,7 @@ export default function App() {
                 onClick={() => {
                   if (dialogueStep < 2) {
                     setDialogueStep(prev => prev + 1);
+                    setShowSecondDialogue(false);
                   } else {
                     setGameState(GameState.MENU);
                   }
@@ -1059,20 +1064,26 @@ export default function App() {
                       >
                         <div className="text-red-500 font-bold text-xs mb-1 uppercase tracking-widest">Agente Speed</div>
                         <div className="text-white text-sm font-mono leading-relaxed">
-                          <TypewriterText text="La central acaba de confirmar la ruta. Tenemos que cruzar la ciudad antes del amanecer." />
+                          <TypewriterText 
+                            text="La central acaba de confirmar la ruta. Tenemos que cruzar la ciudad antes del amanecer." 
+                            onComplete={() => setShowSecondDialogue(true)}
+                          />
                         </div>
                       </motion.div>
-                      <motion.div 
-                        initial={{ x: 20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 1.5 }}
-                        className="bg-black/80 border-r-4 border-neutral-600 p-4 rounded-l-xl text-right shadow-xl self-end"
-                      >
-                        <div className="text-neutral-400 font-bold text-xs mb-1 uppercase tracking-widest">Agente Warden</div>
-                        <div className="text-white text-sm font-mono leading-relaxed italic">
-                          <TypewriterText text="No será fácil, el enemigo nos está buscando." delay={40} />
-                        </div>
-                      </motion.div>
+                      <AnimatePresence>
+                        {showSecondDialogue && (
+                          <motion.div 
+                            initial={{ x: 20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            className="bg-black/80 border-r-4 border-neutral-600 p-4 rounded-l-xl text-right shadow-xl self-end"
+                          >
+                            <div className="text-neutral-400 font-bold text-xs mb-1 uppercase tracking-widest">Agente B</div>
+                            <div className="text-white text-sm font-mono leading-relaxed italic">
+                              <TypewriterText text="No será facil, el enemigo nos está buscando" delay={40} />
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </>
                   )}
 
@@ -1085,20 +1096,26 @@ export default function App() {
                       >
                         <div className="text-blue-400 font-bold text-xs mb-1 uppercase tracking-widest">Niña</div>
                         <div className="text-white text-sm font-mono leading-relaxed">
-                          <TypewriterText text="¿De verdad vamos a llegar al lugar seguro?" />
+                          <TypewriterText 
+                            text="¿De verdad vamos a llegar al lugar seguro?" 
+                            onComplete={() => setShowSecondDialogue(true)}
+                          />
                         </div>
                       </motion.div>
-                      <motion.div 
-                        initial={{ x: 20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 1 }}
-                        className="bg-black/80 border-r-4 border-red-600 p-4 rounded-l-xl text-right shadow-xl self-end"
-                      >
-                        <div className="text-red-500 font-bold text-xs mb-1 uppercase tracking-widest">Agentes</div>
-                        <div className="text-white text-sm font-mono leading-relaxed">
-                          <TypewriterText text="Déjanoslo a nosotros." />
-                        </div>
-                      </motion.div>
+                      <AnimatePresence>
+                        {showSecondDialogue && (
+                          <motion.div 
+                            initial={{ x: 20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            className="bg-black/80 border-r-4 border-red-600 p-4 rounded-l-xl text-right shadow-xl self-end"
+                          >
+                            <div className="text-red-500 font-bold text-xs mb-1 uppercase tracking-widest">Agentes</div>
+                            <div className="text-white text-sm font-mono leading-relaxed">
+                              <TypewriterText text="Dejanoslo a nosotros" />
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </>
                   )}
 
